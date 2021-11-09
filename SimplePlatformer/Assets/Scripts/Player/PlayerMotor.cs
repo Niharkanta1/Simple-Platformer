@@ -18,7 +18,6 @@ public class PlayerMotor : MonoBehaviour
         {
             foreach (PlayerStates state in playerStates)
             {
-                Debug.Log("getting input...");
                 state.LocalInput();
                 state.ExecuteState();
             }

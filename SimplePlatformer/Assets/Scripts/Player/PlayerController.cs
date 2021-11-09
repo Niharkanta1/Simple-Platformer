@@ -12,8 +12,15 @@ public class PlayerController : MonoBehaviour
 
     [Header("Collision")]
     [SerializeField] private LayerMask collideWith;
-    [SerializeField] private int verticalRayAmount;
+    [SerializeField] private int verticalRayAmount = 4;
+    [SerializeField] private int horizontalRayAmount = 4;
+    [SerializeField] private float fallMultiplier = 2f;
 
+    public float Gravity => gravity;
+    public PlayerConditions Conditions => conditions;
+    public Vector2 Force => force;
+
+    #region Internal
     private BoxCollider2D boxCollider2D;
     private PlayerConditions conditions;
 
@@ -25,6 +32,12 @@ public class PlayerController : MonoBehaviour
     private Vector2 movePosition;
 
     private float skin = 0.05f;
+
+    private bool isFacingRight { get; set; } = true;
+    private float internalFaceDirection = 1f;
+    private float faceDirection;
+
+    #endregion
 
     void Start()
     {
@@ -39,20 +52,28 @@ public class PlayerController : MonoBehaviour
         StartMovement();
 
         SetRayOrigins();
+        GetFaceDirection();
+
         CollisionBelow();
+        if (!isFacingRight)
+        {
+            CollisionHorizontal(-1);
+        }
+        else
+        {
+            CollisionHorizontal(1);
+        }
 
         transform.Translate(movePosition, Space.Self);
 
         SetRayOrigins();
         CalculateMovement();
-        Debug.Log("Force x and y " + force.x + " " + force.y);
 
-        Debug.DrawRay(boundBL, Vector2.left, Color.green);
-        Debug.DrawRay(boundTL, Vector2.left, Color.green);
-        Debug.DrawRay(boundTR, Vector2.right, Color.green);
-        Debug.DrawRay(boundBR, Vector2.right, Color.green);
     }
 
+    #region Collision
+
+    #region Collision Below
     private void CollisionBelow()
     {
         if (movePosition.y < 0.0001f)
@@ -92,7 +113,16 @@ public class PlayerController : MonoBehaviour
 
             if (hit)
             {
-                movePosition.y = -hit.distance + boundsHeight / 2f + skin;
+                if (force.y > 0)
+                {
+                    movePosition.y = force.y * Time.deltaTime;
+                    conditions.isCollidingBelow = false;
+                }
+                else
+                {
+                    movePosition.y = -hit.distance + boundsHeight / 2f + skin;
+                }
+
                 conditions.isCollidingBelow = true;
                 conditions.isFalling = false;
 
@@ -101,12 +131,42 @@ public class PlayerController : MonoBehaviour
                     movePosition.y = 0f;
                 }
             }
-            else
+        }
+    }
+    #endregion
+
+    #region Collision Horizontal
+    private void CollisionHorizontal(int direction)
+    {
+        //Calculate Ray Length
+        float rayLength = Mathf.Abs(force.x * Time.deltaTime) + boundsWidth / 2f + skin * 2f;
+
+        //Calculate horizontal Ray Origin
+        Vector2 topOrigin = (boundBL + boundBR) / 2f;
+        Vector2 bottomOrigin = (boundTL + boundTR) / 2f;
+        topOrigin += (Vector2)(transform.up * skin);
+        bottomOrigin -= (Vector2)(transform.up * skin);
+
+        //Raycast
+        for (int i = 0; i < horizontalRayAmount; i++)
+        {
+            Vector2 rayOrigin = Vector2.Lerp(topOrigin, bottomOrigin, (float)i / (float)(horizontalRayAmount - 1));
+            RaycastHit2D hit = Physics2D.Raycast(rayOrigin, direction * transform.right, rayLength, collideWith);
+            Debug.DrawRay(rayOrigin, direction * transform.right * rayLength, Color.cyan);
+
+            if (hit)
             {
-                conditions.isCollidingBelow = false;
+                movePosition.x = direction >= 0 ? hit.distance - boundsWidth / 2f - skin * 2f : -hit.distance + boundsWidth / 2f - skin * 2f;
+                force.x = 0f;
             }
         }
     }
+
+    #endregion
+
+    #endregion
+
+    #region Movement
 
     private void CalculateMovement()
     {
@@ -127,12 +187,47 @@ public class PlayerController : MonoBehaviour
         force.x = xForce;
     }
 
+    public void SetVerticalForce(float yForce)
+    {
+        force.y = yForce;
+    }
+
     private void ApplyGravity()
     {
         currentGravity = gravity;
+        if (force.y < 0)
+        {
+            currentGravity *= fallMultiplier;
+        }
+
         force.y += currentGravity * Time.deltaTime;
     }
 
+    #endregion
+
+    #region Direction
+
+    private void GetFaceDirection()
+    {
+        faceDirection = internalFaceDirection;
+        isFacingRight = faceDirection == 1;
+        if (force.x > 0.0001f)
+        {
+            faceDirection = 1f;
+            isFacingRight = true;
+        }
+        else if (force.x < -0.0001f)
+        {
+            faceDirection = -1f;
+            isFacingRight = false;
+        }
+        internalFaceDirection = faceDirection;
+    }
+
+
+    #endregion
+
+    #region Ray Origins
     private void SetRayOrigins()
     {
         Bounds playerBounds = boxCollider2D.bounds;
@@ -144,4 +239,7 @@ public class PlayerController : MonoBehaviour
         boundsHeight = Vector2.Distance(boundBL, boundTL);
         boundsWidth = Vector2.Distance(boundTL, boundTR);
     }
+    #endregion
+
+
 }
