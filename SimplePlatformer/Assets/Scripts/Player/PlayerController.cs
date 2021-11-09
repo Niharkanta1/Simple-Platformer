@@ -33,9 +33,11 @@ public class PlayerController : MonoBehaviour
 
     private float skin = 0.05f;
 
-    private bool isFacingRight { get; set; } = true;
+    public bool isFacingRight { get; set; } = true;
     private float internalFaceDirection = 1f;
     private float faceDirection;
+
+    private float wallFallMultiplier;
 
     #endregion
 
@@ -55,6 +57,7 @@ public class PlayerController : MonoBehaviour
         GetFaceDirection();
 
         CollisionBelow();
+        CollisionAbove();
         if (!isFacingRight)
         {
             CollisionHorizontal(-1);
@@ -156,8 +159,55 @@ public class PlayerController : MonoBehaviour
 
             if (hit)
             {
-                movePosition.x = direction >= 0 ? hit.distance - boundsWidth / 2f - skin * 2f : -hit.distance + boundsWidth / 2f - skin * 2f;
+                if (direction >= 0)
+                {
+                    movePosition.x = hit.distance - boundsWidth / 2f - skin * 2f;
+                    conditions.isCollidingRight = true;
+                }
+                else
+                {
+                    movePosition.x = -hit.distance + boundsWidth / 2f - skin * 2f;
+                    conditions.isCollidingLeft = true;
+                }
                 force.x = 0f;
+            }
+        }
+    }
+
+    #endregion
+
+    #region Collision Above
+    private void CollisionAbove()
+    {
+        if (movePosition.y < 0)
+        {
+            return;
+        }
+
+        //Calculate Ray Length
+        float rayLength = movePosition.y + boundsHeight / 2f;
+
+        //Calculate horizontal Ray Origin
+        Vector2 leftOrigin = (boundBL + boundTL) / 2f;
+        Vector2 rightOrigin = (boundBR + boundTR) / 2f;
+        leftOrigin += (Vector2)(transform.right * movePosition.x);
+        rightOrigin += (Vector2)(transform.right * movePosition.x);
+
+        //RayCast
+        for (int i = 0; i < horizontalRayAmount; i++)
+        {
+            Vector2 rayOrigin = Vector2.Lerp(leftOrigin, rightOrigin, (float)i / (float)(verticalRayAmount - 1));
+            RaycastHit2D hit = Physics2D.Raycast(rayOrigin, transform.up, rayLength, collideWith);
+            Debug.DrawRay(rayOrigin, transform.up * rayLength, Color.red);
+
+            if (hit)
+            {
+                movePosition.y = hit.distance - boundsHeight / 2f;
+                conditions.isCollidingAbove = true;
+            }
+            else
+            {
+                conditions.isCollidingAbove = false;
             }
         }
     }
@@ -192,6 +242,11 @@ public class PlayerController : MonoBehaviour
         force.y = yForce;
     }
 
+    public void SetWallClingMultiplier(float fallMultiplier)
+    {
+        wallFallMultiplier = fallMultiplier;
+    }
+
     private void ApplyGravity()
     {
         currentGravity = gravity;
@@ -199,8 +254,12 @@ public class PlayerController : MonoBehaviour
         {
             currentGravity *= fallMultiplier;
         }
-
         force.y += currentGravity * Time.deltaTime;
+
+        if (wallFallMultiplier != 0)
+        {
+            force.y *= wallFallMultiplier;
+        }
     }
 
     #endregion
